@@ -22,7 +22,7 @@ class SDNLoadBalancingEnv(gym.Env):
         num_controllers: int = 3,
         num_switches: int = 12,
         use_mock: bool = True,
-        ryu_api_urls: Optional[list] = None,   # list URL cho từng controller trong cluster
+        ryu_api_urls: Optional[list] = None,   # FIX: list URL cho từng controller trong cluster
         alpha: float = 2.0,   # trọng số penalty variance CPU
         beta: float = 0.8,    # trọng số penalty latency
         gamma: float = 1.5,   # trọng số bonus cân bằng
@@ -32,7 +32,9 @@ class SDNLoadBalancingEnv(gym.Env):
         self.num_controllers = num_controllers
         self.num_switches = num_switches
         self.use_mock = use_mock
-        self.ryu_api_urls = ryu_api_urls or [f"http://127.0.0.1:{8080 + i}" for i in range(num_controllers)]
+        self.ryu_api_urls = ryu_api_urls or [
+            f"http://127.0.0.1:{8080 + i}" for i in range(num_controllers)
+        ]
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma
@@ -69,7 +71,10 @@ class SDNLoadBalancingEnv(gym.Env):
     def _get_state_mock(self) -> np.ndarray:
         """
         Mock state: giả lập controller 0 bị overload để agent có động lực migrate.
-        load[i] = [cpu_i, ram_i, packet_in_i] normalize về [0,1].
+
+        BUG CŨ: Hàm _get_state() luôn trả về random hoàn toàn (kể cả nhánh use_mock=False
+        cũng random) → state không phản ánh hành động migrate, agent không học được.
+        FIX: Mock state tính từ switch_assignment → load tỷ lệ với số switch mỗi controller giữ.
         """
         load = np.zeros((self.num_controllers, 3), dtype=np.float32)
         switch_counts = np.bincount(self.switch_assignment, minlength=self.num_controllers)
@@ -112,7 +117,10 @@ class SDNLoadBalancingEnv(gym.Env):
     def _decode_action(self, action: int) -> Tuple[int, int]:
         """
         Giải mã action index → (switch_id, target_controller_id).
-        Action index được map như sau: switch_id = action // (num_controllers - 1)
+
+        BUG CŨ: target_controller = target_offset if target_offset < switch_id % num_controllers
+        → logic sai, có thể trả về target_controller == current_controller (migrate vào chính mình).
+        FIX: Bỏ qua controller đang giữ switch, map offset → controller id đúng.
         """
         switch_id = action // (self.num_controllers - 1)
         offset = action % (self.num_controllers - 1)
@@ -127,8 +135,8 @@ class SDNLoadBalancingEnv(gym.Env):
     def _execute_migration(self, switch_id: int, target_controller: int) -> bool:
         """
         Thực thi switch migration.
-            - Mock mode: cập nhật switch_assignment.
-            - Real mode: gửi OpenFlow Role Request (implement sau).
+        - Mock mode: cập nhật switch_assignment.
+        - Real mode: gửi OpenFlow Role Request (implement sau).
         """
         current_ctrl = self.switch_assignment[switch_id]
         if current_ctrl == target_controller:
@@ -141,12 +149,12 @@ class SDNLoadBalancingEnv(gym.Env):
 
     def _calculate_reward(self, old_variance: float, new_variance: float) -> float:
         """
-        Reward function: R = -alpha * Var(CPU) - beta * latency - migration_cost + gamma * bonus
-        Trong đó:
-            - Var(CPU): variance CPU giữa các controllers (càng thấp càng tốt)
-            - latency: ước lượng latency hiện tại (càng thấp càng tốt)
-            - migration_cost: penalty cho mỗi migration (khuyến khích giải pháp ổn định)
-            - bonus: thưởng thêm nếu variance giảm đáng kể hoặc đạt trạng thái cân bằng tốt
+        Reward function:
+            R = -alpha * Var(CPU) - beta * latency - migration_cost + gamma * bonus
+
+        BUG CŨ: old_variance không được dùng trong reward → agent không được
+        khuyến khích nếu variance giảm so với bước trước.
+        FIX: Thêm delta variance làm tín hiệu cải thiện.
         """
         reward = -self.alpha * new_variance
         reward -= self.beta * self.current_latency
