@@ -54,7 +54,10 @@ sdn-rl-loadbalancer/
 │   └── traffic_generator.py     # Sinh traffic: iperf, scapy (burst, Poisson, DDoS-like)
 ├── monitoring/
 │   ├── system_monitor.py        # Thu thập CPU/RAM từng Ryu process qua psutil → state vector cho RL
-│   └── prometheus_exporter.py   # Expose metrics lên Prometheus endpoint (/metrics)
+│   ├── prometheus_exporter.py   # Expose metrics lên Prometheus endpoint (/metrics)
+│   ├── prometheus.yml           # Cấu hình Prometheus scrape jobs
+│   └── grafana/
+│       └── dashboard.json       # Dashboard Grafana import sẵn
 ├── rl_agent/
 │   ├── envs/
 │   │   ├── __init__.py
@@ -75,10 +78,6 @@ sdn-rl-loadbalancer/
 │   ├── scenario2_dynamic_topo.py # Kịch bản 2: Topology động
 │   ├── scenario3_controller_fault.py # Kịch bản 3: Lỗi controller
 │   └── scenario4_random_traffic.py   # Kịch bản 4: Traffic ngẫu nhiên (Poisson)
-├── monitoring/
-│   ├── prometheus.yml           # Cấu hình Prometheus scrape jobs
-│   └── grafana/
-│       └── dashboard.json       # Dashboard Grafana import sẵn
 ├── models/                      # Model DQN đã huấn luyện (.zip)
 ├── logs/                        # TensorBoard logs
 ├── data/                        # Kết quả đo đạc, biểu đồ (.png, .csv)
