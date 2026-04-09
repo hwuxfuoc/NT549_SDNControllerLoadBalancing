@@ -1,0 +1,11 @@
+ryu
+gymnasium
+stable-baselines3[extra]
+psutil
+scapy
+matplotlib
+seaborn
+pettingzoo
+tensorboard
+requests
+prometheus_client
