@@ -22,13 +22,11 @@ class TrafficGenerator:
         proto_flag = '-u' if protocol.upper() == 'UDP' else ''
         bw_flag = f'-b {bandwidth}' if protocol.upper() == 'UDP' else ''
 
-        # Start server
         server_cmd = f'iperf -s {proto_flag} -p 5001'
         dst.popen(server_cmd)
 
         time.sleep(1)
 
-        # Start client
         client_cmd = f'iperf -c {dst.IP()} {bw_flag} -t {duration} -p 5001'
         proc = src.popen(client_cmd)
         self.active_procs.append(proc)
@@ -52,14 +50,13 @@ class TrafficGenerator:
         for src in src_hosts:
             for dst in dst_hosts:
                 self.add_iperf_flow(src, dst, duration=30, bandwidth=bw, protocol='UDP')
-                time.sleep(0.5)  # stagger để tránh simultaneous start
+                time.sleep(0.5)  
 
     def wait_for_completion(self, timeout: int = 180):
         logger.info("Waiting for traffic flows to complete...")
         start = time.time()
         while time.time() - start < timeout:
             time.sleep(5)
-            # Check if processes are still alive (simple way)
             if all(p.poll() is not None for p in self.active_procs if p.poll() is not None):
                 break
         logger.info("Traffic generation completed or timeout reached")
@@ -82,7 +79,7 @@ def generate_scenario(net: Mininet, scenario: str = 'basic'):
         tg.add_iperf_flow('h2', 'h5', duration=30, bandwidth='5M', protocol='TCP')
         tg.add_ping_flow('h3', 'h6', count=15)
     
-    elif scenario == 'poisson':  # Sẽ mở rộng sau với random sleep
+    elif scenario == 'poisson': 
         for _ in range(8):
             tg.add_iperf_flow(hosts[0], hosts[-1], duration=8, bandwidth='3M')
             time.sleep(2)
@@ -91,7 +88,6 @@ def generate_scenario(net: Mininet, scenario: str = 'basic'):
 
 
 if __name__ == '__main__':
-    # Test standalone
     from custom_topo import create_network
     net = create_network(topo_type='tree', depth=2, fanout=2, enable_cli=False)
     tg = generate_scenario(net, scenario='burst')

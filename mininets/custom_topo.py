@@ -32,7 +32,6 @@ class TreeTopology(Topo):
             if parent:
                 self.addLink(parent, switch)
             
-            # Leaf level -> add hosts
             if level == self.depth - 1:
                 for j in range(self.fanout):
                     self.host_count += 1
@@ -76,9 +75,8 @@ def create_network(topo_type='tree', depth=2, fanout=3, num_switches=4,
     else:
         raise ValueError("topo_type must be 'tree' or 'linear'")
 
-    # Multi-controller support
     if not controllers:
-        controllers = [('127.0.0.1', 6633)]  # default single controller
+        controllers = [('127.0.0.1', 6633)] 
 
     net_controllers = []
     for i, (ip, port) in enumerate(controllers):
@@ -92,7 +90,6 @@ def create_network(topo_type='tree', depth=2, fanout=3, num_switches=4,
                   autoSetMacs=True,
                   autoStaticArp=True)
 
-    # Set bandwidth for all links
     for link in net.links:
         link.intf1.config(bw=link_bw)
         link.intf2.config(bw=link_bw)
@@ -108,7 +105,6 @@ def create_network(topo_type='tree', depth=2, fanout=3, num_switches=4,
         CLI(net)
 
     return net
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -126,7 +122,6 @@ if __name__ == '__main__':
                          controllers=controllers,
                          enable_cli=args.cli)
     
-    # Keep running until user exits
     if not args.cli:
         input("Press Enter to stop the network...")
         net.stop()
