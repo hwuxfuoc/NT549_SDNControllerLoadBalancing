@@ -12,7 +12,7 @@ Bài toán cốt lõi: Khi mạng SDN mở rộng, một controller đơn lẻ d
 ### Mô hình hóa MDP (Markov Decision Process)
 
 | Thành phần | Mô tả |
-| --- | --- |
+|---|---|
 | **State** | Vector `[CPU_c1, RAM_c1, packet_in_c1, ..., CPU_cN, RAM_cN, packet_in_cN]` — tải thực tế của từng controller |
 | **Action** | Discrete: chọn cặp `(switch_id, target_controller_id)` để thực hiện migration |
 | **Reward** | `R = -α·Var(CPU) - β·avg_latency + γ·bonus_nếu_cân_bằng` |
@@ -24,13 +24,18 @@ Mininet (topology + traffic)
         ↓
 Cluster Ryu Controllers (port 6633, 6634, 6635)
         ↓
-Module Giám Sát (psutil + Ryu REST API)  →  State vector
-        ↓
-RL Agent (DQN / Multi-Agent)             →  Action: migrate switch X → controller Y
-        ↓
-Module Hành Động (OpenFlow Role Request) →  Thực thi migration
-        ↓
-Đo reward → cập nhật policy → lặp lại
+Module Giám Sát (psutil + Ryu REST API)
+        │
+        ├──→  State vector  →  RL Agent (DQN / Multi-Agent)
+        │                              ↓
+        │                      Action: migrate switch X → controller Y
+        │                              ↓
+        │                      Module Hành Động (OpenFlow Role Request)
+        │                              ↓
+        │                      Đo reward → cập nhật policy → lặp lại
+        │
+        └──→  Prometheus Exporter  →  Prometheus  →  Grafana Dashboard
+                   (metrics CPU/RAM/latency/reward theo thời gian thực)
 ```
 
 ---
@@ -48,7 +53,8 @@ sdn-rl-loadbalancer/
 │   ├── custom_topo.py           # Topology tree/fat-tree với nhiều switch
 │   └── traffic_generator.py     # Sinh traffic: iperf, scapy (burst, Poisson, DDoS-like)
 ├── monitoring/
-│   └── system_monitor.py        # Thu thập CPU/RAM từng Ryu process qua psutil
+│   ├── system_monitor.py        # Thu thập CPU/RAM từng Ryu process qua psutil → state vector cho RL
+│   └── prometheus_exporter.py   # Expose metrics lên Prometheus endpoint (/metrics)
 ├── rl_agent/
 │   ├── envs/
 │   │   ├── __init__.py
@@ -69,6 +75,10 @@ sdn-rl-loadbalancer/
 │   ├── scenario2_dynamic_topo.py # Kịch bản 2: Topology động
 │   ├── scenario3_controller_fault.py # Kịch bản 3: Lỗi controller
 │   └── scenario4_random_traffic.py   # Kịch bản 4: Traffic ngẫu nhiên (Poisson)
+├── monitoring/
+│   ├── prometheus.yml           # Cấu hình Prometheus scrape jobs
+│   └── grafana/
+│       └── dashboard.json       # Dashboard Grafana import sẵn
 ├── models/                      # Model DQN đã huấn luyện (.zip)
 ├── logs/                        # TensorBoard logs
 ├── data/                        # Kết quả đo đạc, biểu đồ (.png, .csv)
@@ -98,7 +108,22 @@ sudo apt-get install -y mininet openvswitch-switch
 sudo mn -c   # Dọn dẹp môi trường cũ nếu có
 ```
 
-### 2. Cài đặt Python dependencies
+### 3. Cài đặt Prometheus và Grafana
+
+```bash
+# Prometheus
+wget https://github.com/prometheus/prometheus/releases/latest/download/prometheus-*.linux-amd64.tar.gz
+tar xvf prometheus-*.tar.gz
+sudo mv prometheus /usr/local/bin/
+
+# Grafana
+sudo apt-get install -y apt-transport-https software-properties-common
+wget -q -O - https://packages.grafana.com/gpg.key | sudo apt-key add -
+echo "deb https://packages.grafana.com/oss/deb stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
+sudo apt-get update && sudo apt-get install -y grafana
+```
+
+### 4. Cài đặt Python dependencies
 
 ```bash
 pip install -r requirements.txt
@@ -117,9 +142,10 @@ seaborn
 pettingzoo
 tensorboard
 requests
+prometheus_client
 ```
 
-### 3. Kiểm tra Mininet + Ryu cơ bản
+### 5. Kiểm tra Mininet + Ryu cơ bản
 
 ```bash
 # Terminal 1: Khởi động Ryu controller đơn
@@ -159,7 +185,40 @@ sudo python mininet/custom_topo.py --topo tree --depth 2 --fanout 3 \
 
 ---
 
-## Sử Dụng
+## Khởi Động Monitoring Stack (Prometheus + Grafana)
+
+Prometheus và Grafana chạy **song song** với hệ thống RL, dùng để **trực quan hóa** — không tham gia trực tiếp vào vòng lặp RL.
+
+```bash
+# Terminal 5 — Khởi động Prometheus exporter (expose metrics từ psutil + Ryu)
+python monitoring/prometheus_exporter.py
+# Metrics có tại: http://localhost:9090/metrics
+
+# Terminal 6 — Khởi động Prometheus server
+prometheus --config.file=monitoring/prometheus.yml
+# Web UI tại: http://localhost:9090
+
+# Terminal 7 — Khởi động Grafana
+sudo systemctl start grafana-server
+# Dashboard tại: http://localhost:3000 (admin/admin)
+# Import dashboard: Grafana → Import → upload monitoring/grafana/dashboard.json
+```
+
+### Các metrics được expose lên Prometheus
+
+| Metric | Mô tả | Nguồn |
+|---|---|---|
+| `sdn_controller_cpu_percent` | CPU usage từng Ryu process | psutil |
+| `sdn_controller_ram_mb` | RAM usage từng Ryu process | psutil |
+| `sdn_controller_packet_in_rate` | Packet-in rate từng controller | Ryu REST API |
+| `sdn_switch_count` | Số switch kết nối mỗi controller | Ryu REST API |
+| `sdn_rl_reward` | Reward nhận được mỗi step | RL Agent |
+| `sdn_migration_count` | Số lần migrate trong episode | RL Agent |
+| `sdn_avg_latency_ms` | Latency trung bình toàn mạng | Mininet ping |
+
+> **Lưu ý**: `sdn_controller_cpu_percent` và `sdn_controller_ram_mb` được psutil cung cấp **đồng thời** cho cả state vector RL lẫn Prometheus exporter. Hai luồng này chạy độc lập, không ảnh hưởng nhau.
+
+
 
 ### Kiểm tra giám sát và migration thủ công
 
@@ -287,7 +346,7 @@ python scenarios/scenario4_random_traffic.py
 ## Kết Quả Đầu Ra
 
 | File | Nội dung |
-| --- | --- |
+|---|---|
 | `models/dqn_best.zip` | Model DQN tốt nhất sau training |
 | `logs/` | TensorBoard event logs (reward, loss, episode length) |
 | `data/reward_curve.png` | Reward vs Episodes — chứng minh hội tụ |
@@ -316,7 +375,7 @@ python scenarios/scenario4_random_traffic.py
 ## Tham Số Huấn Luyện
 
 | Tham số | Giá trị mặc định | Ghi chú |
-| --- | --- | --- |
+|---|---|---|
 | `total_timesteps` | 200,000 | Tăng lên 500,000 nếu chưa hội tụ |
 | `learning_rate` | 1e-3 | Thử 1e-4 nếu training không ổn định |
 | `exploration_fraction` | 0.15 | Tăng nếu agent hội tụ quá sớm vào local optima |
@@ -370,13 +429,15 @@ curl http://127.0.0.1:8081/stats/switches
 ## Công Cụ Sử Dụng
 
 | Công cụ | Vai trò | Lý do chọn |
-| --- | --- | --- |
+|---|---|---|
 | **Mininet** | Mô phỏng topology SDN + generate traffic | Miễn phí, hỗ trợ OpenFlow đầy đủ |
 | **Ryu** | Cluster controller + REST API giám sát | Python, dễ mở rộng, hỗ trợ multi-instance |
 | **Gymnasium** | Định nghĩa MDP custom (State/Action/Reward) | Chuẩn RL, tích hợp tốt với SB3 |
 | **Stable-Baselines3** | Implement & train DQN/PPO | Code ít, kết quả tốt, có TensorBoard |
 | **PettingZoo** | Multi-agent environment | Chuẩn cho multi-agent RL |
-| **psutil** | Đo CPU/RAM thực tế của Ryu process | Chính xác, đơn giản |
+| **psutil** | Đo CPU/RAM Ryu process → **cấp số liệu cho state vector RL** | Nhanh, trực tiếp, không overhead |
+| **Prometheus** | Thu thập & lưu time-series metrics để phân tích | Chuẩn industry, scrape tự động |
+| **Grafana** | Dashboard trực quan hóa real-time khi demo | Đẹp, dễ import/export dashboard |
 | **Scapy** | Sinh traffic phức tạp (burst, DDoS-like) | Tùy biến cao hơn iperf |
 
 ---
@@ -387,5 +448,7 @@ curl http://127.0.0.1:8081/stats/switches
 - [Mininet Walkthrough](http://mininet.org/walkthrough/)
 - [Gymnasium Custom Environments](https://gymnasium.farama.org/tutorials/gymnasium_basics/environment_creation/)
 - [Stable-Baselines3 DQN](https://stable-baselines3.readthedocs.io/en/master/modules/dqn.html)
+- [PettingZoo Multi-Agent](https://pettingzoo.farama.org/)
+- [OpenFlow 1.3 Spec](https://www.opennetworking.org/wp-content/uploads/2014/10/openflow-spec-v1.3.0.pdf)
 - [PettingZoo Multi-Agent](https://pettingzoo.farama.org/)
 - [OpenFlow 1.3 Spec](https://www.opennetworking.org/wp-content/uploads/2014/10/openflow-spec-v1.3.0.pdf)
