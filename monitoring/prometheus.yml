@@ -1,0 +1,37 @@
+global:
+  scrape_interval: 5s          # Scrape mỗi 5 giây — khớp với SCRAPE_INTERVAL trong exporter
+  evaluation_interval: 5s      # Đánh giá alerting rules mỗi 5 giây
+  scrape_timeout: 3s           # Timeout mỗi scrape request
+
+# ------------------------------------------------------------------
+# Scrape jobs
+# ------------------------------------------------------------------
+
+scrape_configs:
+
+  # 1. SDN Prometheus Exporter — nguồn chính
+  #    Expose CPU/RAM (psutil) + packet_in_rate (Ryu API) + RL metrics
+  - job_name: 'sdn_exporter'
+    static_configs:
+      - targets: ['localhost:9100']
+        labels:
+          project: 'sdn-rl-loadbalancer'
+          env: 'simulation'
+
+  # 2. Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+# ------------------------------------------------------------------
+# Alerting (tùy chọn — dùng nếu muốn cảnh báo khi controller overload)
+# ------------------------------------------------------------------
+# Bỏ comment để bật alerting rules:
+#
+# rule_files:
+#   - "monitoring/alert_rules.yml"
+#
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ['localhost:9093']
