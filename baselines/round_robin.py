@@ -14,6 +14,8 @@ import numpy as np
 import logging
 from typing import Dict, Optional, Tuple
 
+from baselines.policy_utils import encode_action
+
 logger = logging.getLogger(__name__)
 
 class RoundRobinBalancer:
@@ -167,6 +169,18 @@ class RoundRobinBalancer:
         n_overload = int(self.num_switches * 0.6)
         self.switch_assignment[:n_overload] = 0
         self._rr_pointer = 0
+
+    def select_action(self, obs: np.ndarray, env) -> int:
+        """Sinh action cho SDNLoadBalancingEnv theo vòng tròn trên switch + target."""
+        _ = obs
+        self.switch_assignment = env.switch_assignment.copy()
+
+        switch_id = self._rr_pointer % self.num_switches
+        self._rr_pointer = (self._rr_pointer + 1) % self.num_switches
+
+        current_ctrl = int(self.switch_assignment[switch_id])
+        target_ctrl = (current_ctrl + 1) % self.num_controllers
+        return encode_action(self.switch_assignment, switch_id, target_ctrl, self.num_controllers)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
