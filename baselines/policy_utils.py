@@ -5,6 +5,7 @@ from typing import Optional
 import numpy as np
 
 
+# Map a concrete migration decision into the environment's discrete action index.
 def encode_action(
     switch_assignment: np.ndarray,
     switch_id: int,
@@ -21,6 +22,7 @@ def encode_action(
     return int(switch_id * (num_controllers - 1) + offset)
 
 
+# Generate one valid random migration action for exploration/baseline fallback.
 def pick_random_valid_action(
     switch_assignment: np.ndarray,
     num_controllers: int,

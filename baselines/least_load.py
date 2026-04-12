@@ -33,6 +33,7 @@ class LeastLoadBalancer:
         imbalance_threshold: Chênh lệch CPU tối thiểu để migrate (mặc định 0.15).
     """
 
+    # Initialize thresholds/configuration and create first assignment.
     def __init__(
         self,
         num_controllers: int = 3,
@@ -52,6 +53,7 @@ class LeastLoadBalancer:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    # Build initial intentionally imbalanced placement for stress testing.
     def _initial_assignment(self) -> None:
         """Phân phối switch ban đầu (mất cân bằng để test)."""
         self.switch_assignment = np.array([i % self.num_controllers for i in range(self.num_switches)])
@@ -62,6 +64,7 @@ class LeastLoadBalancer:
         counts = np.bincount(self.switch_assignment, minlength=self.num_controllers).tolist()
         logger.info(f"[LeastLoad] Phân phối ban đầu: {counts} switches/controller")
 
+    # Create synthetic per-controller load values from current switch ownership.
     def _mock_load(self) -> np.ndarray:
         """Mock load tỷ lệ với số switch mỗi controller giữ."""
         counts = np.bincount(self.switch_assignment, minlength=self.num_controllers).astype(float)
@@ -73,6 +76,7 @@ class LeastLoadBalancer:
             load[i, 2] = np.clip(base + np.random.normal(0, 0.05), 0.0, 1.0)  # packet_in
         return load
 
+    # Pick a candidate switch from the overloaded controller.
     def _find_best_switch_to_migrate(self, from_controller: int) -> Optional[int]:
         """
         Chọn switch nào của `from_controller` nên migrate.
@@ -92,6 +96,7 @@ class LeastLoadBalancer:
     # Core API
     # ------------------------------------------------------------------
 
+    # Decide one migration using highest-CPU to lowest-CPU heuristic.
     def decide_migration(self, current_loads: np.ndarray) -> Optional[Tuple[int, int]]:
         """
         Quyết định migrate dựa trên load thực tế (greedy).
@@ -148,6 +153,7 @@ class LeastLoadBalancer:
         )
         return switch_id, least_loaded_ctrl
 
+    # Apply migration by updating in-memory switch assignment.
     def execute_migration(self, switch_id: int, target_controller: int) -> bool:
         """
         Thực thi migration: cập nhật switch_assignment.
@@ -170,11 +176,13 @@ class LeastLoadBalancer:
         logger.debug(f"[LeastLoad] s{switch_id}: ctrl {old_ctrl} → {target_controller}")
         return True
 
+    # Report how many switches each controller is currently responsible for.
     def get_load_distribution(self) -> Dict[int, int]:
         """Trả về số switch mỗi controller đang giữ."""
         counts = np.bincount(self.switch_assignment, minlength=self.num_controllers)
         return {i: int(counts[i]) for i in range(self.num_controllers)}
 
+    # Run one simulation episode and aggregate key baseline metrics.
     def run_episode(self, num_steps: int = 200, load_fn=None) -> Dict[str, float]:
         """
         Chạy một episode để lấy metrics so sánh với RL agent.
@@ -220,10 +228,12 @@ class LeastLoadBalancer:
         )
         return metrics
 
+    # Reset to the initial imbalanced test state.
     def reset(self) -> None:
         """Reset về trạng thái mất cân bằng ban đầu để test."""
         self._initial_assignment()
 
+    # Convert least-load decision into a Gymnasium-compatible action index.
     def select_action(self, obs: np.ndarray, env) -> int:
         """Sinh action cho SDNLoadBalancingEnv dựa trên controller quá tải nhất."""
         self.switch_assignment = env.switch_assignment.copy()
