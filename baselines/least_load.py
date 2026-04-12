@@ -17,6 +17,8 @@ import numpy as np
 import logging
 from typing import Dict, Optional, Tuple
 
+from baselines.policy_utils import encode_action, pick_random_valid_action
+
 logger = logging.getLogger(__name__)
 
 class LeastLoadBalancer:
@@ -221,6 +223,21 @@ class LeastLoadBalancer:
     def reset(self) -> None:
         """Reset về trạng thái mất cân bằng ban đầu để test."""
         self._initial_assignment()
+
+    def select_action(self, obs: np.ndarray, env) -> int:
+        """Sinh action cho SDNLoadBalancingEnv dựa trên controller quá tải nhất."""
+        self.switch_assignment = env.switch_assignment.copy()
+
+        load_matrix = obs.reshape(self.num_controllers, 3)
+        decision = self.decide_migration(load_matrix)
+        if decision is None:
+            return pick_random_valid_action(
+                switch_assignment=self.switch_assignment,
+                num_controllers=self.num_controllers,
+            )
+
+        switch_id, target_ctrl = decision
+        return encode_action(self.switch_assignment, switch_id, target_ctrl, self.num_controllers)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
