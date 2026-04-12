@@ -1,0 +1,7 @@
+logs/*
+models/*
+data/*
+
+!logs/.gitkeep
+!models/.gitkeep
+!data/.gitkeep
