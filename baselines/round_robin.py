@@ -1,18 +1,8 @@
-"""
-round_robin.py
---------------
-Baseline: Round-Robin Load Balancing cho SDN Cluster Controllers.
-
-Logic: Phân phối switch đến các controller theo vòng tròn (luân phiên).
-Khi có switch mới hoặc cần migrate, controller được chọn theo thứ tự
-0 → 1 → 2 → 0 → 1 → 2 → ...
-
-Dùng để so sánh với RL agent trong evaluate.py.
-"""
-
 import numpy as np
 import logging
 from typing import Dict, Optional, Tuple
+
+from baselines.policy_utils import encode_action
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +24,7 @@ class RoundRobinBalancer:
         self._rr_pointer: int = 0
 
         # switch_assignment[i] = controller đang giữ switch i
-        self.switch_assignment: np.ndarray = np.full(num_switches, -1, dtype=int)
+        self.switch_assignment: np.ndarray = np.full(num_switches, -1, dtype = int)
 
         # Phân phối ban đầu theo Round-Robin
         self._initial_assignment()
@@ -48,13 +38,13 @@ class RoundRobinBalancer:
         for sw in range(self.num_switches):
             self.switch_assignment[sw] = sw % self.num_controllers
         self._rr_pointer = self.num_switches % self.num_controllers
-        counts = np.bincount(self.switch_assignment, minlength=self.num_controllers).tolist()
+        counts = np.bincount(self.switch_assignment, minlength = self.num_controllers).tolist()
         logger.info(f"[RoundRobin] Phân phối ban đầu: {counts} switches/controller")
 
     def _mock_load(self) -> np.ndarray:
         """Mock load tỷ lệ với số switch mỗi controller giữ."""
-        counts = np.bincount(self.switch_assignment, minlength=self.num_controllers).astype(float)
-        load = np.zeros((self.num_controllers, 3), dtype=np.float32)
+        counts = np.bincount(self.switch_assignment, minlength = self.num_controllers).astype(float)
+        load = np.zeros((self.num_controllers, 3), dtype = np.float32)
         for i in range(self.num_controllers):
             base = counts[i] / self.num_switches
             load[i, 0] = np.clip(base + np.random.normal(0, 0.04), 0.0, 1.0)  # cpu
@@ -80,7 +70,7 @@ class RoundRobinBalancer:
         Returns:
             (switch_id, target_controller) hoặc None nếu đã cân bằng.
         """
-        counts = np.bincount(self.switch_assignment, minlength=self.num_controllers)
+        counts = np.bincount(self.switch_assignment, minlength = self.num_controllers)
         max_ctrl = int(np.argmax(counts))
         min_ctrl = int(np.argmin(counts))
 
@@ -119,7 +109,7 @@ class RoundRobinBalancer:
 
     def get_load_distribution(self) -> Dict[int, int]:
         """Trả về số switch mỗi controller đang giữ."""
-        counts = np.bincount(self.switch_assignment, minlength=self.num_controllers)
+        counts = np.bincount(self.switch_assignment, minlength = self.num_controllers)
         return {i: int(counts[i]) for i in range(self.num_controllers)}
 
     def run_episode(self, num_steps: int = 200, load_fn=None) -> Dict[str, float]:
@@ -153,6 +143,7 @@ class RoundRobinBalancer:
             "final_variance_cpu": float(variances[-1]) if variances else 0.0,
             "migration_count": migration_count,
         }
+
         logger.info(
             f"[RoundRobin] Episode done — "
             f"Var: {metrics['mean_variance_cpu']:.4f} | "
@@ -168,10 +159,22 @@ class RoundRobinBalancer:
         self.switch_assignment[:n_overload] = 0
         self._rr_pointer = 0
 
+    def select_action(self, obs: np.ndarray, env) -> int:
+        """Sinh action cho SDNLoadBalancingEnv theo vòng tròn trên switch + target."""
+        _ = obs
+        self.switch_assignment = env.switch_assignment.copy()
+
+        switch_id = self._rr_pointer % self.num_switches
+        self._rr_pointer = (self._rr_pointer + 1) % self.num_switches
+
+        current_ctrl = int(self.switch_assignment[switch_id])
+        target_ctrl = (current_ctrl + 1) % self.num_controllers
+        return encode_action(self.switch_assignment, switch_id, target_ctrl, self.num_controllers)
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    balancer = RoundRobinBalancer(num_controllers=3, num_switches=12)
+    balancer = RoundRobinBalancer(num_controllers = 3, num_switches = 12)
 
     print("\n=== Phân phối ban đầu ===")
     print(balancer.get_load_distribution())
