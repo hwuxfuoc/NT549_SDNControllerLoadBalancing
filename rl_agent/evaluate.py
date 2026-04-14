@@ -10,6 +10,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from rl_agent.envs.sdn_env import SDNLoadBalancingEnv
+from baselines import make_baseline
 
 logging.basicConfig(
     level=logging.INFO,
@@ -95,46 +96,19 @@ def evaluate_baseline(
         - least_load: chọn switch của controller có CPU cao nhất để migrate sang controller ít tải nhất.
     """
     env = make_env(num_controllers, num_switches, use_mock=True)
+    policy = make_baseline(baseline_name, num_controllers, num_switches)
     episode_rewards = []
-    rr_counter = 0
 
     for episode in range(n_episodes):
         obs, _ = env.reset()
+        if hasattr(policy, "reset"):
+            policy.reset()
         done = False
         truncated = False
         total_reward = 0.0
 
         while not done and not truncated:
-            if baseline_name == "random":
-                action = env.action_space.sample()
-
-            elif baseline_name == "round_robin":
-                action = rr_counter % env.action_space.n
-                rr_counter += 1
-
-            elif baseline_name == "least_load":
-                # Chọn switch của controller có CPU cao nhất → migrate đi
-                cpu_loads = obs[::3]  # CPU của từng controller
-                overloaded_ctrl = int(np.argmax(cpu_loads))
-                # Tìm switch đang thuộc controller đó
-                candidates = [
-                    sw for sw in range(num_switches)
-                    if sw % num_controllers == overloaded_ctrl
-                ]
-                if candidates:
-                    # Chọn switch đầu tiên của controller bị overload
-                    switch_id = candidates[0]
-                    target_ctrl = int(np.argmin(cpu_loads))
-                    if target_ctrl == overloaded_ctrl:
-                        target_ctrl = (overloaded_ctrl + 1) % num_controllers
-                    # Map (switch_id, target_ctrl) → action index
-                    candidates_ctrl = [c for c in range(num_controllers) if c != overloaded_ctrl]
-                    offset = candidates_ctrl.index(target_ctrl) if target_ctrl in candidates_ctrl else 0
-                    action = switch_id * (num_controllers - 1) + offset
-                else:
-                    action = env.action_space.sample()
-            else:
-                raise ValueError(f"Unknown baseline: {baseline_name}")
+            action = policy.select_action(obs, env)
 
             obs, reward, done, truncated, _ = env.step(action)
             total_reward += float(reward)
