@@ -160,6 +160,9 @@ pip install python-dateutil==2.8.2
 pip install "gymnasium<1.1.0"
 
 pip install -r requirements.txt
+
+pip install "urllib3<2"
+pip install "requests<2.32"
 ```
 
 **Nội dung `requirements.txt`:**
