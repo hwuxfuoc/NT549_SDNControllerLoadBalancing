@@ -150,7 +150,10 @@ source venv/bin/activate
 
 pip install --upgrade pip
 
-pip install ryu==4.34
+pip install "setuptools<58"
+pip install "wheel<0.38"
+
+pip install ryu==4.34 --no-build-isolation
 pip install eventlet==0.30.2
 
 pip install python-dateutil==2.8.2
