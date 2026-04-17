@@ -99,40 +99,69 @@ sdn-rl-loadbalancer/
 
 ## Cài Đặt
 
-### 1. Cài đặt Mininet và Open vSwitch
+### 1. Cài đặt Python
+
+```bash
+sudo apt update
+sudo apt install python3 python3-pip python3-venv -y
+
+echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### 2. Cài đặt Mininet và Open vSwitch
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y mininet openvswitch-switch
+git clone https://github.com/mininet/mininet
+cd mininet
+sudo ./util/install.sh -a
 sudo mn -c   # Dọn dẹp môi trường cũ nếu có
 ```
 
-### 3. Cài đặt Prometheus và Grafana
+### 3. Cài đặt python cho `/mininet`
+
+```bash
+cd mininet
+sudo python3 setup.py install
+sudo python3 -c "import mininet; print('OK')"
+```
+
+### 4. Cài đặt Prometheus và Grafana
 
 ```bash
 # Prometheus
-wget https://github.com/prometheus/prometheus/releases/latest/download/prometheus-*.linux-amd64.tar.gz
+wget https://github.com/prometheus/prometheus/releases/download/v3.11.2/prometheus-3.11.2.linux-amd64.tar.gz
 tar xvf prometheus-*.tar.gz
-sudo mv prometheus /usr/local/bin/
+sudo mv prometheus-3.11.2.linux-amd64 /usr/local/bin/
 
 # Grafana
 sudo apt-get install -y apt-transport-https software-properties-common
 wget -q -O - https://packages.grafana.com/gpg.key | sudo apt-key add -
-echo "deb https://packages.grafana.com/oss/deb stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
+echo "deb <https://packages.grafana.com/oss/deb> stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
 sudo apt-get update && sudo apt-get install -y grafana
 ```
 
-### 4. Cài đặt Python dependencies
+### 5. Cài đặt Python dependencies
 
 ```bash
+python3 -m venv venv
+source venv/bin/activate
+
+pip install --upgrade pip
+
+pip install ryu==4.34
+pip install eventlet==0.30.2
+
+pip install python-dateutil==2.8.2
+pip install "gymnasium<1.1.0"
+
 pip install -r requirements.txt
 ```
 
 **Nội dung `requirements.txt`:**
 
 ```
-ryu
-gymnasium
 stable-baselines3[extra]
 psutil
 scapy
@@ -144,14 +173,14 @@ requests
 prometheus_client
 ```
 
-### 5. Kiểm tra Mininet + Ryu cơ bản
+### 6. Kiểm tra Mininet + Ryu cơ bản
 
 ```bash
 # Terminal 1: Khởi động Ryu controller đơn
 ryu-manager controllers/ryu_app_c1.py controllers/monitor_api.py
 
 # Terminal 2: Tạo topology nhỏ và kiểm tra
-sudo python mininet/custom_topo.py --topo linear --n 4
+sudo python3 mininets/custom_topo.py --topo linear --switches 4
 # Trong Mininet CLI:
 # mininet> pingall
 # mininet> h1 iperf -s &
