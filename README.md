@@ -138,7 +138,7 @@ sudo mv prometheus-3.11.2.linux-amd64 /usr/local/bin/
 # Grafana
 sudo apt-get install -y apt-transport-https software-properties-common
 wget -q -O - https://packages.grafana.com/gpg.key | sudo apt-key add -
-echo "deb <https://packages.grafana.com/oss/deb> stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
+echo "deb https://packages.grafana.com/oss/deb stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
 sudo apt-get update && sudo apt-get install -y grafana
 ```
 
