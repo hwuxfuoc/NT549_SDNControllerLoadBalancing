@@ -218,19 +218,19 @@ sudo python3 mininets/custom_topo.py --topo linear --switches 4
 
 ```bash
 # Terminal 1 — Controller 1
-ryu-manager controllers/ryu_app_c1.py controllers/monitor_api.py \\
+ryu-manager controllers/ryu_app_c1.py controllers/monitor_api.py \
     --ofp-tcp-listen-port 6633 --wsapi-port 8080
 
 # Terminal 2 — Controller 2
-ryu-manager controllers/ryu_app_c2.py \\
+ryu-manager controllers/ryu_app_c2.py \
     --ofp-tcp-listen-port 6634 --wsapi-port 8081
 
 # Terminal 3 — Controller 3
-ryu-manager controllers/ryu_app_c3.py \\
+ryu-manager controllers/ryu_app_c3.py \
     --ofp-tcp-listen-port 6635 --wsapi-port 8082
 
 # Terminal 4 — Tạo topology kết nối với cả 3 controller
-sudo python3 mininets/custom_topo.py --topo tree --depth 2 --fanout 3 \\
+sudo python3 mininets/custom_topo.py --topo tree --depth 2 --fanout 3 \
     --controllers 127.0.0.1:6633,127.0.0.1:6634,127.0.0.1:6635
 ```
 
@@ -284,14 +284,14 @@ python3 -m utils.migration_executor --switch 1 --target-controller 2
 
 ```bash
 # Chạy DQN
-python3 rl_agent/train.py \\
-    --algo dqn \\
-    --timesteps 200000 \\
-    --learning-rate 1e-3 \\
-    --batch-size 64 \\
-    --buffer-size 50000 \\
-    --exploration-fraction 0.15 \\
-    --controllers 3 \\
+python3 rl_agent/train.py \
+    --algo dqn \
+    --timesteps 200000 \
+    --learning-rate 1e-3 \
+    --batch-size 64 \
+    --buffer-size 50000 \
+    --exploration-fraction 0.15 \
+    --controllers 3 \
     --switches 12 
 
 # Chạy PPO
@@ -320,9 +320,9 @@ python3 rl_agent/train_multiagent.py \
 ### Đánh Giá và So Sánh Baselines
 
 ```bash
-python rl_agent/evaluate.py \\
-    --model models/dqn_best.zip \\
-    --compare round_robin least_load \\
+python rl_agent/evaluate.py \
+    --model models/dqn_best.zip \
+    --compare round_robin least_load \
     --episodes 50
 ```
 
@@ -371,7 +371,7 @@ reward = (
 ### Kịch Bản 1 — Burst Traffic
 
 ```bash
-python scenarios/scenario1_burst.py
+python3 scenarios/scenario1_burst.py
 # Traffic thấp ban đầu → đột ngột tăng packet-in trên nhóm switch
 # Mục tiêu: Agent phát hiện overload và migrate trong < 5 giây
 # Kỳ vọng: Giảm latency từ ~50ms xuống < 20ms, variance CPU giảm 30%
@@ -380,7 +380,7 @@ python scenarios/scenario1_burst.py
 ### Kịch Bản 2 — Topology Động
 
 ```bash
-python scenarios/scenario2_dynamic_topo.py
+python3 scenarios/scenario2_dynamic_topo.py
 # Thêm/xóa switch động trong lúc chạy
 # Mục tiêu: Agent duy trì cân bằng lâu dài khi topo thay đổi
 # Kỳ vọng: Throughput loss < 5% (so với Round-Robin là 20%)
@@ -389,7 +389,7 @@ python scenarios/scenario2_dynamic_topo.py
 ### Kịch Bản 3 — Lỗi Controller Tạm Thời
 
 ```bash
-python scenarios/scenario3_controller_fault.py
+python3 scenarios/scenario3_controller_fault.py
 # Giả lập overload CPU một controller bằng stress tool
 # Mục tiêu: Agent migrate switch sang controllers khỏe mạnh, phục hồi khi controller ổn định
 # Kỳ vọng: Uptime 99%, reward hội tụ sau ~100 episodes
@@ -398,7 +398,7 @@ python scenarios/scenario3_controller_fault.py
 ### Kịch Bản 4 — Traffic Ngẫu Nhiên (Poisson)
 
 ```bash
-python scenarios/scenario4_random_traffic.py
+python3 scenarios/scenario4_random_traffic.py
 # Packet-in rate theo phân phối Poisson, peak bất ngờ nhiều controller
 # Mục tiêu: Agent xử lý multi-overload, ưu tiên switch có impact lớn nhất
 # Kỳ vọng: Max latency giảm từ ~100ms xuống ~30ms, RAM < 70% tất cả controllers
