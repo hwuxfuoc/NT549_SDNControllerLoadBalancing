@@ -183,7 +183,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Evaluate SDN RL Agent")
-    parser.add_argument("--model", default="models/dqn_best", help="Đường dẫn model")
+    parser.add_argument("--model", default="models/multiagent/dqn_controller_0.zip", help="Đường dẫn model")
     parser.add_argument("--episodes", type=int, default=10)
     parser.add_argument("--controllers", type=int, default=3)
     parser.add_argument("--switches", type=int, default=12)

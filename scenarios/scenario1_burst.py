@@ -254,7 +254,7 @@ def main(model_path: str, output_dir: str = "data/scenario1"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Scenario 1: Burst Traffic")
-    parser.add_argument("--model", default = "models/dqn_best.zip")
+    parser.add_argument("--model", default = "models/multiagent/dqn_controller_0.zip")
     parser.add_argument("--output", default = "data/scenario1")
     parser.add_argument("--episodes", type = int, default = N_EPISODES)
     args = parser.parse_args()

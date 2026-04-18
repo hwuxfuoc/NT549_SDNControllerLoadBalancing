@@ -280,7 +280,7 @@ def main(model_path: str, output_dir: str = "data/scenario2"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Scenario 2: Dynamic Topology")
-    parser.add_argument("--model", default="models/dqn_best.zip")
+    parser.add_argument("--model", default="models/multiagent/dqn_controller_0.zip")
     parser.add_argument("--output", default="data/scenario2")
     parser.add_argument("--episodes", type=int, default=N_EPISODES)
     args = parser.parse_args()

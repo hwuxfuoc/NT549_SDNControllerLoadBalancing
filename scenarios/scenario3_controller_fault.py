@@ -304,7 +304,7 @@ def main(model_path: str, output_dir: str = "data/scenario3"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Scenario 3: Controller Fault")
-    parser.add_argument("--model", default = "models/dqn_best.zip")
+    parser.add_argument("--model", default = "models/multiagent/dqn_controller_0.zip")
     parser.add_argument("--output", default = "data/scenario3")
     parser.add_argument("--episodes", type = int, default = N_EPISODES)
     args = parser.parse_args()

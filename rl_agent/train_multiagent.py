@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 from typing import Dict
 import numpy as np
+import gymnasium as gym
 
 from stable_baselines3 import DQN
 from stable_baselines3.common.vec_env import DummyVecEnv
@@ -14,7 +15,7 @@ logging.basicConfig(level = logging.INFO, format = "%(asctime)s - %(name)s - %(l
 
 logger = logging.getLogger("train_multiagent")
 
-class SingleAgentWrapper(SDNMultiAgentEnv):
+class SingleAgentWrapper(gym.Env):
     """
     Wrap SDNMultiAgentEnv thành single-agent Gymnasium env để train từng agent
     với Stable-Baselines3 (SB3 không hỗ trợ multi-agent trực tiếp).
@@ -23,33 +24,39 @@ class SingleAgentWrapper(SDNMultiAgentEnv):
     """
 
     def __init__(self, agent_id: str, num_controllers: int = 3, num_switches: int = 12):
-        super().__init__(num_controllers = num_controllers, num_switches = num_switches, use_mock = True)
+        super().__init__()
+
+        self.env = SDNMultiAgentEnv(
+            num_controllers = num_controllers,
+            num_switches = num_switches,
+            use_mock = True
+        )
+
         self.my_agent = agent_id
+        self.num_switches = num_switches
         self.my_idx = int(agent_id.split("_")[1])
 
         # Override spaces theo Gymnasium
-        import gymnasium as gym
-        self.observation_space = gym.spaces.Box(low = 0.0, high = 1.0, shape=(num_controllers * 3,), dtype = np.float32)
+        self.observation_space = gym.spaces.Box(low = 0.0, high = 1.0, shape = (num_controllers * 3,), dtype = np.float32)        
         self.action_space = gym.spaces.Discrete(num_switches + 1)
 
     def reset(self, seed = None, options = None):
-        obs_dict, info_dict = super().reset(seed = seed, options = options)
-        return obs_dict[self.my_agent], info_dict.get(self.my_agent, {})
+        obs_dict, _ = self.env.reset(seed = seed, options = options)
+        return obs_dict[self.my_agent], {}
 
     def step(self, action):
         # Tạo actions dict: agent mình dùng action thật, agents khác no-op
-        actions = {agent: self.num_switches for agent in self.agents}  # no-op mặc định
+        actions = {agent: self.num_switches for agent in self.env.agents}
         actions[self.my_agent] = int(action)
 
-        obs_dict, rew_dict, term_dict, trunc_dict, info_dict = super().step(actions)
+        obs_dict, rew_dict, term_dict, trunc_dict, _ = self.env.step(actions)
 
         obs = obs_dict.get(self.my_agent, np.zeros(self.observation_space.shape, dtype = np.float32))
         reward = rew_dict.get(self.my_agent, 0.0)
         terminated = term_dict.get(self.my_agent, False)
         truncated = trunc_dict.get(self.my_agent, False)
-        info = info_dict.get(self.my_agent, {})
 
-        return obs, reward, terminated, truncated, info
+        return obs, reward, terminated, truncated, {}
 
 class MultiAgentSDNTrainer:
     def __init__(
