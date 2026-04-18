@@ -23,7 +23,7 @@ DEFAULT_CONFIG = {
     "num_switches": 12,
     "total_timesteps": 200000,
     "n_episodes": 20,
-    "model_path": "models/dqn_best.zip",
+    "model_path": "models/best_model.zip",
     "model_dir": "models/",
     "log_dir": "logs/",
     "data_dir": "data/",
@@ -110,11 +110,13 @@ def wait_for_user(msg: str = "Nhấn Enter để tiếp tục...") -> None:
 # ------------------------------------------------------------------
 
 def mode_train(cfg: dict) -> None:
-    """Train DQN single-agent."""
-    print_banner("TRAIN DQN SINGLE-AGENT")
-    from rl_agent.train_dqn import train_dqn
-
-    model = train_dqn(
+    """Train single-agent với thuật toán được chỉ định (DQN/PPO/DDPG)."""
+    algo = cfg.get("algo", "dqn").upper()
+    print_banner(f"TRAIN SINGLE-AGENT — {algo}")
+    from rl_agent.train import train
+ 
+    model = train(
+        algo=cfg.get("algo", "dqn"),
         total_timesteps=cfg["total_timesteps"],
         num_controllers=cfg["num_controllers"],
         num_switches=cfg["num_switches"],
@@ -122,8 +124,7 @@ def mode_train(cfg: dict) -> None:
         log_dir=cfg["log_dir"],
         use_mock=cfg["use_mock"],
     )
-
-    logger.info(f"✓ Training hoàn tất. Model: {cfg['model_dir']}dqn_best.zip")
+    logger.info(f"✓ Training hoàn tất. Best model: {cfg['model_dir']}best_model.zip")
     logger.info(f"  Xem TensorBoard: tensorboard --logdir {cfg['log_dir']}")
 
 def mode_train_multi(cfg: dict) -> None:
@@ -304,18 +305,20 @@ Ví dụ:
         help = "Chế độ chạy (default: guide — in hướng dẫn khởi động)"
     )
     parser.add_argument("--model", default = DEFAULT_CONFIG["model_path"], help = f"Đường dẫn model (default: {DEFAULT_CONFIG['model_path']})")
+    parser.add_argument("--algo", choices = ["dqn", "ppo", "ddpg"], default = "dqn", help = "Thuật toán RL để train (default: dqn)")
     parser.add_argument("--timesteps", type = int, default = DEFAULT_CONFIG["total_timesteps"], help = f"Timesteps training (default: {DEFAULT_CONFIG['total_timesteps']})")
     parser.add_argument("--episodes", type = int, default = DEFAULT_CONFIG["n_episodes"], help = f"Số episodes đánh giá (default: {DEFAULT_CONFIG['n_episodes']})")
     parser.add_argument("--controllers", type=int, default=DEFAULT_CONFIG["num_controllers"], help = "Số controllers (default: 3)")
     parser.add_argument("--switches", type=int, default= DEFAULT_CONFIG["num_switches"], help = "Số switches (default: 12)")
     parser.add_argument("--real", action="store_true", help = "Dùng Ryu thật thay vì mock (yêu cầu Ryu + Mininet đang chạy)")
-    parser.add_argument("--prom-port", type=int, default=DEFAULT_CONFIG["prometheus_port"], help = f"Prometheus exporter port (default: {DEFAULT_CONFIG['prometheus_port']})")
+    parser.add_argument("--prom-port", type=int, default = DEFAULT_CONFIG["prometheus_port"], help = f"Prometheus exporter port (default: {DEFAULT_CONFIG['prometheus_port']})")
 
     args = parser.parse_args()
 
     cfg = {
         **DEFAULT_CONFIG,
         "model_path": args.model,
+        "algo": args.algo,
         "total_timesteps": args.timesteps,
         "n_episodes": args.episodes,
         "num_controllers": args.controllers,
