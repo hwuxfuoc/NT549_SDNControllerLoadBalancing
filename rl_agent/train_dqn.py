@@ -94,20 +94,22 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Train DQN for SDN Load Balancing")
     parser.add_argument("--timesteps", type=int, default=200000)
-    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--buffer-size", type=int, default=100000)
     parser.add_argument("--controllers", type=int, default=3)
     parser.add_argument("--switches", type=int, default=12)
+    parser.add_argument("--exploration-fraction", type=float, default=0.15)
     parser.add_argument("--real", action="store_true", help="Dùng Ryu thật thay vì mock")
     args = parser.parse_args()
 
     train_dqn(
         total_timesteps=args.timesteps,
-        learning_rate=args.lr,
+        learning_rate=args.learning-rate,
         batch_size=args.batch_size,
         buffer_size=args.buffer_size,
         num_controllers=args.controllers,
         num_switches=args.switches,
+        exploration_fraction=args.exploration_fraction,
         use_mock=not args.real,
     )
