@@ -110,7 +110,7 @@ def wait_for_user(msg: str = "Nhấn Enter để tiếp tục...") -> None:
 # ------------------------------------------------------------------
 
 def mode_train(cfg: dict) -> None:
-    """Train single-agent với thuật toán được chỉ định (DQN/PPO/DDPG)."""
+    """Train single-agent với thuật toán được chỉ định (DQN/PPO)."""
     algo = cfg.get("algo", "dqn").upper()
     print_banner(f"TRAIN SINGLE-AGENT — {algo}")
     from rl_agent.train import train
@@ -305,7 +305,7 @@ Ví dụ:
         help = "Chế độ chạy (default: guide — in hướng dẫn khởi động)"
     )
     parser.add_argument("--model", default = DEFAULT_CONFIG["model_path"], help = f"Đường dẫn model (default: {DEFAULT_CONFIG['model_path']})")
-    parser.add_argument("--algo", choices = ["dqn", "ppo", "ddpg"], default = "dqn", help = "Thuật toán RL để train (default: dqn)")
+    parser.add_argument("--algo", choices = ["dqn", "ppo"], default = "dqn", help = "Thuật toán RL để train (default: dqn)")
     parser.add_argument("--timesteps", type = int, default = DEFAULT_CONFIG["total_timesteps"], help = f"Timesteps training (default: {DEFAULT_CONFIG['total_timesteps']})")
     parser.add_argument("--episodes", type = int, default = DEFAULT_CONFIG["n_episodes"], help = f"Số episodes đánh giá (default: {DEFAULT_CONFIG['n_episodes']})")
     parser.add_argument("--controllers", type=int, default=DEFAULT_CONFIG["num_controllers"], help = "Số controllers (default: 3)")
