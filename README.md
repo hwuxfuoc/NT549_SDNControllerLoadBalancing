@@ -63,8 +63,11 @@ sdn-rl-loadbalancer/
 │   │   ├── __init__.py
 │   │   ├── sdn_env.py           # Single-agent Gymnasium environment
 │   │   └── sdn_multiagent_env.py # Multi-agent PettingZoo environment
-│   ├── train_dqn.py             # Huấn luyện DQN (Stable-Baselines3)
-│   ├── train_multiagent.py      # Huấn luyện Multi-Agent (Independent DQN / MADDPG)
+│   ├── algorithms/
+│   │   ├── dqn_builder.py
+│   │   └── ppo_builder.py
+│   ├── train.py                 # Huấn luyện DQN, PPO (Stable-Baselines3)
+│   ├── train_multiagent.py      # Huấn luyện Multi-Agent (Independent DQN)
 │   └── evaluate.py              # Đánh giá & so sánh với baselines
 ├── baselines/
 │   ├── round_robin.py           # Baseline: Round-Robin
@@ -127,14 +130,21 @@ sudo python3 setup.py install
 sudo python3 -c "import mininet; print('OK')"
 ```
 
-### 4. Cài đặt Prometheus và Grafana
+### 4. Cài đặt Prometheus
 
 ```bash
 # Prometheus
 wget https://github.com/prometheus/prometheus/releases/download/v3.11.2/prometheus-3.11.2.linux-amd64.tar.gz
 tar xvf prometheus-*.tar.gz
-sudo mv prometheus-3.11.2.linux-amd64 /usr/local/bin/
+cd prometheus-3.11.2.linux-amd64
 
+sudo mv prometheus /usr/local/bin/
+sudo mv promtool /usr/local/bin/
+```
+
+### 5. Cài đặt Grafana
+
+```bash
 # Grafana
 sudo apt-get install -y apt-transport-https software-properties-common
 wget -q -O - https://packages.grafana.com/gpg.key | sudo apt-key add -
@@ -142,7 +152,14 @@ echo "deb https://packages.grafana.com/oss/deb stable main" | sudo tee /etc/apt/
 sudo apt-get update && sudo apt-get install -y grafana
 ```
 
-### 5. Cài đặt Python dependencies
+### 6. Cài đặt môi trường Python
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### 7. Cài đặt Python dependencies
 
 ```bash
 python3 -m venv venv
@@ -179,7 +196,7 @@ requests
 prometheus_client
 ```
 
-### 6. Kiểm tra Mininet + Ryu cơ bản
+### 8. Kiểm tra Mininet + Ryu cơ bản
 
 ```bash
 # Terminal 1: Khởi động Ryu controller đơn
@@ -201,19 +218,19 @@ sudo python3 mininets/custom_topo.py --topo linear --switches 4
 
 ```bash
 # Terminal 1 — Controller 1
-ryu-manager controllers/ryu_app_c1.py controllers/monitor_api.py \
+ryu-manager controllers/ryu_app_c1.py controllers/monitor_api.py \\
     --ofp-tcp-listen-port 6633 --wsapi-port 8080
 
 # Terminal 2 — Controller 2
-ryu-manager controllers/ryu_app_c2.py \
+ryu-manager controllers/ryu_app_c2.py \\
     --ofp-tcp-listen-port 6634 --wsapi-port 8081
 
 # Terminal 3 — Controller 3
-ryu-manager controllers/ryu_app_c3.py \
+ryu-manager controllers/ryu_app_c3.py \\
     --ofp-tcp-listen-port 6635 --wsapi-port 8082
 
 # Terminal 4 — Tạo topology kết nối với cả 3 controller
-sudo python mininet/custom_topo.py --topo tree --depth 2 --fanout 3 \
+sudo python3 mininets/custom_topo.py --topo tree --depth 2 --fanout 3 \\
     --controllers 127.0.0.1:6633,127.0.0.1:6634,127.0.0.1:6635
 ```
 
@@ -225,23 +242,23 @@ Prometheus và Grafana chạy **song song** với hệ thống RL, dùng để *
 
 ```bash
 # Terminal 5 — Khởi động Prometheus exporter (expose metrics từ psutil + Ryu)
-python monitoring/prometheus_exporter.py
-# Metrics có tại: http://localhost:9090/metrics
+python -m monitoring.prometheus_exporter
+# Metrics có tại: <http://localhost:9090/metrics>
 
 # Terminal 6 — Khởi động Prometheus server
 prometheus --config.file=monitoring/prometheus.yml
-# Web UI tại: http://localhost:9090
+# Web UI tại: <http://localhost:9090>
 
 # Terminal 7 — Khởi động Grafana
 sudo systemctl start grafana-server
-# Dashboard tại: http://localhost:3000 (admin/admin)
+# Dashboard tại: <http://localhost:3000> (admin/admin)
 # Import dashboard: Grafana → Import → upload monitoring/grafana/dashboard.json
 ```
 
 ### Các metrics được expose lên Prometheus
 
 | Metric | Mô tả | Nguồn |
-|---|---|---|
+| --- | --- | --- |
 | `sdn_controller_cpu_percent` | CPU usage từng Ryu process | psutil |
 | `sdn_controller_ram_mb` | RAM usage từng Ryu process | psutil |
 | `sdn_controller_packet_in_rate` | Packet-in rate từng controller | Ryu REST API |
@@ -251,8 +268,7 @@ sudo systemctl start grafana-server
 | `sdn_avg_latency_ms` | Latency trung bình toàn mạng | Mininet ping |
 
 > **Lưu ý**: `sdn_controller_cpu_percent` và `sdn_controller_ram_mb` được psutil cung cấp **đồng thời** cho cả state vector RL lẫn Prometheus exporter. Hai luồng này chạy độc lập, không ảnh hưởng nhau.
-
-
+> 
 
 ### Kiểm tra giám sát và migration thủ công
 
@@ -261,39 +277,52 @@ sudo systemctl start grafana-server
 python monitoring/system_monitor.py
 
 # Thực hiện migrate switch thủ công (test trước khi dùng RL)
-python utils/migration_executor.py --switch 1 --target-controller 2
+python3 -m utils.migration_executor --switch 1 --target-controller 2
 ```
 
-### Huấn luyện RL Agent (Single-Agent DQN)
+### Huấn luyện RL Agent (Single-Agent DQN/PPO/DDPG)
 
 ```bash
-python rl_agent/train_dqn.py \
-    --total-timesteps 200000 \
-    --learning-rate 1e-3 \
+# Chạy DQN
+python3 rl_agent/train.py \\
+    --algo dqn \\
+    --timesteps 200000 \\
+    --learning-rate 1e-3 \\
+    --batch-size 64 \\
+    --buffer-size 50000 \\
+    --exploration-fraction 0.15 \\
+    --controllers 3 \\
+    --switches 12 
+
+# Chạy PPO
+python3 rl_agent/train.py \
+    --algo ppo \
+    --timesteps 200000 \
+    --learning-rate 3e-4 \
     --batch-size 64 \
-    --buffer-size 50000 \
-    --exploration-fraction 0.15
+    --controllers 3 \
+    --switches 12
 
 # Theo dõi quá trình huấn luyện
 tensorboard --logdir logs/
 ```
 
-### Huấn luyện Multi-Agent RL
+### Huấn luyện Multi-Agent RL (DQN)
 
 ```bash
 # Mỗi Ryu controller là một agent độc lập
-python rl_agent/train_multiagent.py \
-    --algorithm independent_dqn \
-    --n-agents 3 \
-    --total-timesteps 300000
+python3 rl_agent/train_multiagent.py \
+    --timesteps 300000 \
+    --controllers 3 \
+    --switches 12
 ```
 
 ### Đánh Giá và So Sánh Baselines
 
 ```bash
-python rl_agent/evaluate.py \
-    --model models/dqn_best.zip \
-    --compare round_robin least_load \
+python rl_agent/evaluate.py \\
+    --model models/dqn_best.zip \\
+    --compare round_robin least_load \\
     --episodes 50
 ```
 
