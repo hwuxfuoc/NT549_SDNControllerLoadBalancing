@@ -83,7 +83,7 @@ class MultiAgentSDNTrainer:
 
         for agent_id in agent_ids:
             wrapper = SingleAgentWrapper(agent_id, num_controllers, num_switches)
-            vec_env = DummyVecEnv([lambda aid=agent_id, nc=num_controllers, ns=num_switches: SingleAgentWrapper(aid, nc, ns)])
+            vec_env = DummyVecEnv([lambda aid = agent_id, nc=num_controllers, ns = num_switches: SingleAgentWrapper(aid, nc, ns)])
 
             model = DQN(
                 "MlpPolicy",
@@ -174,12 +174,12 @@ class MultiAgentSDNTrainer:
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description="Multi-Agent Training for SDN Load Balancing")
-    parser.add_argument("--train", action="store_true")
-    parser.add_argument("--evaluate", action="store_true")
-    parser.add_argument("--timesteps", type=int, default=100000)
-    parser.add_argument("--controllers", type=int, default=3)
-    parser.add_argument("--switches", type=int, default=12)
+    parser = argparse.ArgumentParser(description = "Multi-Agent Training for SDN Load Balancing")
+    parser.add_argument("--train", action = "store_true")
+    parser.add_argument("--evaluate", action = "store_true")
+    parser.add_argument("--timesteps", type = int, default = 100000)
+    parser.add_argument("--controllers", type = int, default = 3)
+    parser.add_argument("--switches", type = int, default = 12)
     args = parser.parse_args()
 
     trainer = MultiAgentSDNTrainer(

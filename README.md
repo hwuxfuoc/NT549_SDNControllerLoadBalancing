@@ -242,7 +242,7 @@ Prometheus và Grafana chạy **song song** với hệ thống RL, dùng để *
 
 ```bash
 # Terminal 5 — Khởi động Prometheus exporter (expose metrics từ psutil + Ryu)
-python -m monitoring.prometheus_exporter
+python3 -m monitoring.prometheus_exporter
 # Metrics có tại: <http://localhost:9090/metrics>
 
 # Terminal 6 — Khởi động Prometheus server
@@ -274,7 +274,7 @@ sudo systemctl start grafana-server
 
 ```bash
 # Xem metrics CPU/RAM từng controller process
-python monitoring/system_monitor.py
+python3 monitoring/system_monitor.py
 
 # Thực hiện migrate switch thủ công (test trước khi dùng RL)
 python3 -m utils.migration_executor --switch 1 --target-controller 2
@@ -324,6 +324,17 @@ python rl_agent/evaluate.py \
     --model models/dqn_best.zip \
     --compare round_robin least_load \
     --episodes 50
+    
+# Single-agent
+python rl_agent/evaluate.py  \
+		--model models/best_model.zip \
+		--episodes 20
+
+# Multi-agent (load cả 3 agent models từ thư mục)
+python rl_agent/evaluate.py \
+		--model models/multiagent/ \
+		--multiagent \
+		--episodes 20
 ```
 
 Kết quả xuất ra `data/comparison.png` và `data/metrics.csv`.
@@ -375,6 +386,12 @@ python3 scenarios/scenario1_burst.py
 # Traffic thấp ban đầu → đột ngột tăng packet-in trên nhóm switch
 # Mục tiêu: Agent phát hiện overload và migrate trong < 5 giây
 # Kỳ vọng: Giảm latency từ ~50ms xuống < 20ms, variance CPU giảm 30%
+
+# Single-agent
+python3 scenarios/scenario1_burst.py --model models/best_model.zip
+
+# Multi-agent (3 controllers phối hợp)
+python3 scenarios/scenario1_burst.py --model models/multiagent/ --multiagent
 ```
 
 ### Kịch Bản 2 — Topology Động
@@ -384,6 +401,12 @@ python3 scenarios/scenario2_dynamic_topo.py
 # Thêm/xóa switch động trong lúc chạy
 # Mục tiêu: Agent duy trì cân bằng lâu dài khi topo thay đổi
 # Kỳ vọng: Throughput loss < 5% (so với Round-Robin là 20%)
+
+# Single-agent
+python3 scenarios/scenario2_dynamic_topo.py --model models/best_model.zip
+
+# Multi-agent (3 controllers phối hợp)
+python3 scenarios/scenario2_dynamic_topo.py --model models/multiagent/ --multiagent
 ```
 
 ### Kịch Bản 3 — Lỗi Controller Tạm Thời
@@ -393,6 +416,12 @@ python3 scenarios/scenario3_controller_fault.py
 # Giả lập overload CPU một controller bằng stress tool
 # Mục tiêu: Agent migrate switch sang controllers khỏe mạnh, phục hồi khi controller ổn định
 # Kỳ vọng: Uptime 99%, reward hội tụ sau ~100 episodes
+
+# Single-agent
+python3 scenarios/scenario3_controller_fault.py --model models/best_model.zip
+
+# Multi-agent (3 controllers phối hợp)
+python3 scenarios/scenario3_controller_fault.py --model models/multiagent/ --multiagent
 ```
 
 ### Kịch Bản 4 — Traffic Ngẫu Nhiên (Poisson)
@@ -402,6 +431,12 @@ python3 scenarios/scenario4_random_traffic.py
 # Packet-in rate theo phân phối Poisson, peak bất ngờ nhiều controller
 # Mục tiêu: Agent xử lý multi-overload, ưu tiên switch có impact lớn nhất
 # Kỳ vọng: Max latency giảm từ ~100ms xuống ~30ms, RAM < 70% tất cả controllers
+
+# Single-agent
+python3 scenarios/scenario4_random_traffic.py --model models/best_model.zip
+
+# Multi-agent (3 controllers phối hợp)
+python3 scenarios/scenario4_random_traffic.py --model models/multiagent/ --multiagent
 ```
 
 ---
