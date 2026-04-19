@@ -222,11 +222,11 @@ ryu-manager controllers/ryu_app_c1.py controllers/monitor_api.py \
     --ofp-tcp-listen-port 6633 --wsapi-port 8080
 
 # Terminal 2 — Controller 2
-ryu-manager controllers/ryu_app_c2.py \
+ryu-manager controllers/ryu_app_c2.py controllers/monitor_api.py \
     --ofp-tcp-listen-port 6634 --wsapi-port 8081
 
 # Terminal 3 — Controller 3
-ryu-manager controllers/ryu_app_c3.py \
+ryu-manager controllers/ryu_app_c3.py controllers/monitor_api.py \
     --ofp-tcp-listen-port 6635 --wsapi-port 8082
 
 # Terminal 4 — Tạo topology kết nối với cả 3 controller
