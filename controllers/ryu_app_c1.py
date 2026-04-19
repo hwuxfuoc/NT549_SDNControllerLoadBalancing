@@ -195,3 +195,4 @@ class MonitorController(ControllerBase):
             "switches": [hex(dpid) for dpid in self.app.connected_switches],
         }
         return Response(json_body = data)
+    
