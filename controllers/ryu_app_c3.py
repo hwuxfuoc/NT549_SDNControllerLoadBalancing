@@ -135,7 +135,8 @@ class MonitorController(ControllerBase):
 
     @route("monitor", "/monitor/load", methods=["GET"])
     def get_load(self, req, **kwargs):
-        return Response(content_type = "application/json", body = json.dumps(self.app.get_metrics()))
+        metrics = self.app.get_metrics()
+        return Response(json_body = metrics)
 
     @route("monitor", "/monitor/switches", methods=["GET"])
     def get_switches(self, req, **kwargs):
@@ -144,4 +145,4 @@ class MonitorController(ControllerBase):
             "switch_count": len(self.app.connected_switches),
             "switches": [hex(dpid) for dpid in self.app.connected_switches],
         }
-        return Response(content_type = "application/json", body = json.dumps(data))
+        return Response(json_body = data)
