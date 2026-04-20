@@ -20,7 +20,7 @@ class RoundRobinBalancer:
         self.num_controllers = num_controllers
         self.num_switches = num_switches
         self._rr_pointer: int = 0
-        self.switch_assignment: np.ndarray = np.full(num_switches, -1, dtype=int)
+        self.switch_assignment: np.ndarray = np.full(num_switches, -1, dtype = int)
         self._initial_assignment()
 
     # ------------------------------------------------------------------
@@ -31,12 +31,12 @@ class RoundRobinBalancer:
         for sw in range(self.num_switches):
             self.switch_assignment[sw] = sw % self.num_controllers
         self._rr_pointer = self.num_switches % self.num_controllers
-        counts = np.bincount(self.switch_assignment, minlength=self.num_controllers).tolist()
+        counts = np.bincount(self.switch_assignment, minlength = self.num_controllers).tolist()
         logger.info(f"[RoundRobin] Phân phối ban đầu: {counts} switches/controller")
 
     def _mock_load(self) -> np.ndarray:
-        counts = np.bincount(self.switch_assignment, minlength=self.num_controllers).astype(float)
-        load = np.zeros((self.num_controllers, 3), dtype=np.float32)
+        counts = np.bincount(self.switch_assignment, minlength = self.num_controllers).astype(float)
+        load = np.zeros((self.num_controllers, 3), dtype = np.float32)
         for i in range(self.num_controllers):
             base = counts[i] / self.num_switches
             load[i, 0] = np.clip(base + np.random.normal(0, 0.04), 0.0, 1.0)
@@ -54,7 +54,7 @@ class RoundRobinBalancer:
         Round-Robin không dựa vào load thực tế — chỉ điều chỉnh khi
         số switch giữa các controller chênh lệch > 1.
         """
-        counts = np.bincount(self.switch_assignment, minlength=self.num_controllers)
+        counts = np.bincount(self.switch_assignment, minlength = self.num_controllers)
         max_ctrl = int(np.argmax(counts))
         min_ctrl = int(np.argmin(counts))
 
@@ -87,7 +87,7 @@ class RoundRobinBalancer:
         counts = np.bincount(self.switch_assignment, minlength=self.num_controllers)
         return {i: int(counts[i]) for i in range(self.num_controllers)}
 
-    def run_episode(self, num_steps: int = 200, load_fn=None) -> Dict[str, float]:
+    def run_episode(self, num_steps: int = 200, load_fn = None) -> Dict[str, float]:
         self.reset()
         migration_count = 0
         variances = []
@@ -106,6 +106,7 @@ class RoundRobinBalancer:
             "final_variance_cpu": float(variances[-1]) if variances else 0.0,
             "migration_count": migration_count,
         }
+
         logger.info(
             f"[RoundRobin] Episode done — "
             f"Var: {metrics['mean_variance_cpu']:.4f} | Migrations: {migration_count}"
@@ -147,6 +148,6 @@ if __name__ == "__main__":
     print("\n=== Phân phối ban đầu ===")
     print(balancer.get_load_distribution())
     print("\n=== Chạy episode 200 bước ===")
-    metrics = balancer.run_episode(num_steps=200)
+    metrics = balancer.run_episode(num_steps = 200)
     for k, v in metrics.items():
         print(f"  {k}: {v:.4f}")
