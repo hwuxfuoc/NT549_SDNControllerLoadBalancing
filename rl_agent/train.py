@@ -1,11 +1,14 @@
 import os
 import sys
+import shutil
 import logging
 import argparse
+import numpy as np
 from pathlib import Path
 
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.evaluation import evaluate_policy
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -13,37 +16,47 @@ from rl_agent.envs.sdn_env import SDNLoadBalancingEnv
 from rl_agent.algorithms.dqn_builder import build_dqn
 from rl_agent.algorithms.ppo_builder import build_ppo
 
-logging.basicConfig(level = logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("train")
-
-# ------------------------------------------------------------------
-# Các thuật toán được hỗ trợ
-# ------------------------------------------------------------------
 
 SUPPORTED_ALGOS = ["dqn", "ppo"]
 
-# Mapping tên algo → builder function
 _BUILDERS = {
-    "dqn":  build_dqn,
-    "ppo":  build_ppo,
+    "dqn": build_dqn,
+    "ppo": build_ppo,
 }
 
-# Tên file model lưu theo algo
 _MODEL_NAMES = {
-    "dqn":  "dqn_final",
-    "ppo":  "ppo_final",
+    "dqn": "dqn_final",
+    "ppo": "ppo_final",
 }
+
+EVAL_SEED = 123   # seed cố định cho eval_env — nhất quán giữa mọi lần train & evaluate
 
 # ------------------------------------------------------------------
 # Helper
 # ------------------------------------------------------------------
 
 def make_env(num_controllers: int, num_switches: int, use_mock: bool) -> SDNLoadBalancingEnv:
-    """Tạo một instance SDNLoadBalancingEnv với tham số cho trước."""
-    return SDNLoadBalancingEnv(num_controllers = num_controllers, num_switches = num_switches, use_mock = use_mock)
+    return SDNLoadBalancingEnv(num_controllers=num_controllers, num_switches=num_switches, use_mock=use_mock)
+
+
+def _make_seeded_eval_env(num_controllers: int, num_switches: int, use_mock: bool) -> DummyVecEnv:
+    """
+    Tạo eval_env với seed cố định EVAL_SEED.
+    Dùng cả trong EvalCallback (training) lẫn evaluate.py để kết quả nhất quán.
+    """
+    def _factory():
+        env = make_env(num_controllers, num_switches, use_mock)
+        env.reset(seed=EVAL_SEED)   # fix seed ngay từ đầu
+        return env
+
+    vec = DummyVecEnv([_factory])
+    vec.seed(EVAL_SEED)
+    return vec
 
 # ------------------------------------------------------------------
-# Hàm training chính
+# Training chính
 # ------------------------------------------------------------------
 
 def train(
@@ -59,31 +72,12 @@ def train(
     log_dir: str = "logs/",
     use_mock: bool = True,
 ):
-    """
-    Train một RL agent với thuật toán được chỉ định.
-
-    Args:
-        algo:                 Tên thuật toán — "dqn" hoặc "ppo".
-        total_timesteps:      Tổng số environment steps để train.
-        learning_rate:        Learning rate của optimizer.
-        batch_size:           Số samples mỗi lần update network.
-        buffer_size:          Kích thước replay buffer (chỉ dùng cho DQN).
-        exploration_fraction: Tỉ lệ timesteps dành cho epsilon-greedy exploration (chỉ DQN).
-        num_controllers:      Số Ryu controllers trong cluster.
-        num_switches:         Số switches trong mạng.
-        model_dir:            Thư mục lưu model (.zip).
-        log_dir:              Thư mục lưu TensorBoard logs.
-        use_mock:             True = dùng mock state, False = kết nối Ryu thật.
-
-    Returns:
-        Trained SB3 model object.
-    """
     algo = algo.lower().strip()
     if algo not in SUPPORTED_ALGOS:
         raise ValueError(f"Thuật toán '{algo}' không được hỗ trợ. Chọn: {SUPPORTED_ALGOS}")
 
-    Path(model_dir).mkdir(parents = True, exist_ok = True)
-    Path(log_dir).mkdir(parents = True, exist_ok = True)
+    Path(model_dir).mkdir(parents=True, exist_ok=True)
+    Path(log_dir).mkdir(parents=True, exist_ok=True)
 
     logger.info("=" * 60)
     logger.info(f"BẮT ĐẦU HUẤN LUYỆN SINGLE-AGENT — {algo.upper()}")
@@ -91,75 +85,108 @@ def train(
     logger.info(f"Mode: {'MOCK' if use_mock else 'REAL (Ryu + Mininet)'}")
     logger.info("=" * 60)
 
-    # ------------------------------------------------------------------
-    # Tạo môi trường
-    # ------------------------------------------------------------------
+    # ── Môi trường ────────────────────────────────────────────────────
+    env = DummyVecEnv([
+        lambda nc=num_controllers, ns=num_switches, um=use_mock: make_env(nc, ns, um)
+    ])
 
-    # DummyVecEnv bọc env thành vectorized format mà SB3 yêu cầu.
-    # Lambda dùng default argument để tránh closure bug trong Python.
-    env = DummyVecEnv([lambda nc = num_controllers, ns = num_switches, um = use_mock: make_env(nc, ns, um)])
-    eval_env = DummyVecEnv([lambda nc = num_controllers, ns = num_switches, um = use_mock: make_env(nc, ns, um)])
+    # FIX 1: eval_env seed cố định → EvalCallback chọn best_model nhất quán
+    eval_env = _make_seeded_eval_env(num_controllers, num_switches, use_mock)
 
-    # ------------------------------------------------------------------
-    # Xây dựng model theo algo
-    # ------------------------------------------------------------------
-    # Mỗi builder nhận (env, log_dir, learning_rate, ...) và trả về SB3 model.
-    # DDPG yêu cầu continuous action space — nếu env là discrete, cần wrap.
-    # Với bài toán này discrete action là phù hợp nhất, DDPG là optional.
-
+    # ── Xây dựng model ───────────────────────────────────────────────
     builder = _BUILDERS[algo]
 
     if algo == "dqn":
         model = builder(
-            env = env,
-            log_dir = log_dir,
-            learning_rate = learning_rate,
-            batch_size = batch_size,
-            buffer_size = buffer_size,
-            exploration_fraction = exploration_fraction,
+            env=env,
+            log_dir=log_dir,
+            learning_rate=learning_rate,
+            batch_size=batch_size,
+            buffer_size=buffer_size,
+            exploration_fraction=exploration_fraction,
         )
-
     elif algo == "ppo":
         model = builder(
-            env = env,
-            log_dir = log_dir,
-            learning_rate = learning_rate,
-            batch_size = batch_size,
+            env=env,
+            log_dir=log_dir,
+            learning_rate=learning_rate,
+            batch_size=batch_size,
         )
 
-    # ------------------------------------------------------------------
-    # EvalCallback: lưu best model định kỳ
-    # ------------------------------------------------------------------
+    # ── EvalCallback ─────────────────────────────────────────────────
+    # FIX 2: lưu best_model theo algo riêng → DQN/PPO không đè nhau
+    #   models/dqn_best_model.zip
+    #   models/ppo_best_model.zip
+    algo_best_dir = Path(model_dir) / f"{algo}_best"
+    algo_best_dir.mkdir(parents=True, exist_ok=True)
 
     eval_callback = EvalCallback(
         eval_env,
-        best_model_save_path = model_dir,          # lưu vào models/best_model.zip
-        log_path = log_dir,
-        eval_freq = 10000,                          # eval mỗi 10,000 training steps
-        n_eval_episodes = 5,
-        deterministic = True,
-        verbose = 1,
+        best_model_save_path=str(algo_best_dir),   # → algo_best/best_model.zip
+        log_path=log_dir,
+        eval_freq=10000,
+        n_eval_episodes=5,
+        deterministic=True,
+        verbose=1,
     )
 
-    # ------------------------------------------------------------------
-    # Training
-    # ------------------------------------------------------------------
-
+    # ── Training ─────────────────────────────────────────────────────
     logger.info(f"Bắt đầu training {algo.upper()}...")
-    model.learn(total_timesteps = total_timesteps, callback = eval_callback, progress_bar = True)
+    model.learn(total_timesteps=total_timesteps, callback=eval_callback, progress_bar=True)
 
-    # Lưu final model (best model đã được EvalCallback lưu riêng)
-    final_name = _MODEL_NAMES[algo]
-    final_path = os.path.join(model_dir, final_name)
+    # ── Lưu final model ───────────────────────────────────────────────
+    final_name   = _MODEL_NAMES[algo]
+    final_path   = os.path.join(model_dir, final_name)
     model.save(final_path)
+    logger.info(f"Final model đã lưu: {final_path}.zip")
 
-    logger.info(f"Training hoàn tất!")
-    logger.info(f"  Final model: {final_path}.zip")
-    logger.info(f"  Best model:  {os.path.join(model_dir, 'best_model')}.zip")
-    logger.info(f"  TensorBoard: tensorboard --logdir {log_dir}")
+    # ── FIX 3: so sánh final vs best, ghi best_model.zip tổng ────────
+    best_zip      = algo_best_dir / "best_model.zip"
+    final_zip     = Path(f"{final_path}.zip")
+    global_best   = Path(model_dir) / "best_model.zip"
 
+    # Tạo eval_env mới (seed cố định) để đánh giá công bằng
+    cmp_env = _make_seeded_eval_env(num_controllers, num_switches, use_mock)
+
+    # Nạp lại từ file để đảm bảo so sánh đúng weights đã lưu
+    from stable_baselines3 import DQN, PPO
+    _cls = DQN if algo == "dqn" else PPO
+
+    final_model = _cls.load(str(final_zip).replace(".zip", ""), env=cmp_env)
+    final_mean, _ = evaluate_policy(final_model, cmp_env, n_eval_episodes=10, deterministic=True)
+    cmp_env.seed(EVAL_SEED)   # reset seed trước khi eval best
+
+    best_mean = float("-inf")
+    best_model_zip_src = None
+
+    if best_zip.exists():
+        best_model = _cls.load(str(best_zip).replace(".zip", ""), env=cmp_env)
+        best_mean, _ = evaluate_policy(best_model, cmp_env, n_eval_episodes=10, deterministic=True)
+
+    logger.info(f"So sánh — Final: {final_mean:.4f} | Best checkpoint: {best_mean:.4f}")
+
+    if final_mean >= best_mean:
+        winner_src  = final_zip
+        winner_name = f"{algo.upper()} Final"
+    else:
+        winner_src  = best_zip
+        winner_name = f"{algo.upper()} Best checkpoint"
+
+    shutil.copy2(str(winner_src), str(global_best))
+    logger.info(f"✓ best_model.zip ← {winner_name} ({max(final_mean, best_mean):.4f})")
+
+    cmp_env.close()
     env.close()
     eval_env.close()
+
+    logger.info("=" * 60)
+    logger.info(f"Training hoàn tất!")
+    logger.info(f"  {algo}_final.zip   : {final_path}.zip  ({final_mean:.4f})")
+    logger.info(f"  {algo}_best/best_model.zip : {best_zip}  ({best_mean:.4f})")
+    logger.info(f"  best_model.zip (tổng)      : {global_best}  ({max(final_mean, best_mean):.4f})")
+    logger.info(f"  TensorBoard: tensorboard --logdir {log_dir}")
+    logger.info("=" * 60)
+
     return model
 
 # ------------------------------------------------------------------
@@ -176,29 +203,29 @@ Ví dụ:
   python rl_agent/train.py --algo ppo --timesteps 300000 --learning-rate 3e-4
         """
     )
-    parser.add_argument("--algo", choices = SUPPORTED_ALGOS, default = "dqn", help = "Thuật toán RL (default: dqn)")
-    parser.add_argument("--timesteps", type = int, default = 200000, help = "Tổng timesteps training (default: 200000)")
-    parser.add_argument("--learning-rate", type = float, default = 1e-3, help = "Learning rate (default: 1e-3)")
-    parser.add_argument("--batch-size", type = int, default = 64, help = "Batch size (default: 64)")
-    parser.add_argument("--buffer-size", type = int, default = 100000, help = "Replay buffer size — chỉ DQN (default: 100000)")
-    parser.add_argument("--exploration-fraction", type = float, default = 0.15, help = "Exploration fraction — chỉ DQN (default: 0.15)")
-    parser.add_argument("--controllers", type = int, default = 3, help = "Số controllers (default: 3)")
-    parser.add_argument("--switches", type = int, default = 12, help = "Số switches (default: 12)")
-    parser.add_argument("--model-dir", default = "models/", help = "Thư mục lưu model (default: models/)")
-    parser.add_argument("--log-dir", default = "logs/", help = "Thư mục TensorBoard logs (default: logs/)")
-    parser.add_argument("--real", action = "store_true", help = "Kết nối Ryu thật thay vì mock")
+    parser.add_argument("--algo",                 choices=SUPPORTED_ALGOS, default="dqn")
+    parser.add_argument("--timesteps",            type=int,   default=200000)
+    parser.add_argument("--learning-rate",        type=float, default=1e-3)
+    parser.add_argument("--batch-size",           type=int,   default=64)
+    parser.add_argument("--buffer-size",          type=int,   default=100000)
+    parser.add_argument("--exploration-fraction", type=float, default=0.15)
+    parser.add_argument("--controllers",          type=int,   default=3)
+    parser.add_argument("--switches",             type=int,   default=12)
+    parser.add_argument("--model-dir",            default="models/")
+    parser.add_argument("--log-dir",              default="logs/")
+    parser.add_argument("--real",                 action="store_true")
     args = parser.parse_args()
 
     train(
-        algo = args.algo,
-        total_timesteps = args.timesteps,
-        learning_rate = args.learning_rate,
-        batch_size = args.batch_size,
-        buffer_size = args.buffer_size,
-        exploration_fraction = args.exploration_fraction,
-        num_controllers = args.controllers,
-        num_switches = args.switches,
-        model_dir = args.model_dir,
-        log_dir = args.log_dir,
-        use_mock = not args.real,
+        algo=args.algo,
+        total_timesteps=args.timesteps,
+        learning_rate=args.learning_rate,
+        batch_size=args.batch_size,
+        buffer_size=args.buffer_size,
+        exploration_fraction=args.exploration_fraction,
+        num_controllers=args.controllers,
+        num_switches=args.switches,
+        model_dir=args.model_dir,
+        log_dir=args.log_dir,
+        use_mock=not args.real,
     )
