@@ -1,4 +1,3 @@
-# NT549_SDNControllerLoadBalancing
 # SDN Controller Load Balancing với Reinforcement Learning
 
 Hệ thống cân bằng tải thông minh cho cụm SDN Controller (Cluster Controllers) sử dụng Deep Reinforcement Learning (DQN), triển khai trên nền tảng Mininet + Ryu.
@@ -12,7 +11,7 @@ Bài toán cốt lõi: Khi mạng SDN mở rộng, một controller đơn lẻ d
 ### Mô hình hóa MDP (Markov Decision Process)
 
 | Thành phần | Mô tả |
-|---|---|
+| --- | --- |
 | **State** | Vector `[CPU_c1, RAM_c1, packet_in_c1, ..., CPU_cN, RAM_cN, packet_in_cN]` — tải thực tế của từng controller |
 | **Action** | Discrete: chọn cặp `(switch_id, target_controller_id)` để thực hiện migration |
 | **Reward** | `R = -α·Var(CPU) - β·avg_latency + γ·bonus_nếu_cân_bằng` |
@@ -162,9 +161,6 @@ source venv/bin/activate
 ### 7. Cài đặt Python dependencies
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-
 pip install --upgrade pip
 
 pip install "setuptools<58"
@@ -287,18 +283,18 @@ python3 -m utils.migration_executor --switch 1 --target-controller 2
 # Chạy DQN
 python3 rl_agent/train.py \
     --algo dqn \
-    --timesteps 200000 \
+    --timesteps 500000 \
     --learning-rate 1e-3 \
     --batch-size 64 \
     --buffer-size 50000 \
-    --exploration-fraction 0.15 \
+    --exploration-fraction 0.3 \
     --controllers 3 \
     --switches 12 
 
 # Chạy PPO
 python3 rl_agent/train.py \
     --algo ppo \
-    --timesteps 200000 \
+    --timesteps 500000 \
     --learning-rate 3e-4 \
     --batch-size 64 \
     --controllers 3 \
@@ -313,7 +309,7 @@ tensorboard --logdir logs/
 ```bash
 # Mỗi Ryu controller là một agent độc lập
 python3 rl_agent/train_multiagent.py \
-    --timesteps 300000 \
+    --timesteps 500000 \
     --controllers 3 \
     --switches 12
 ```
@@ -321,21 +317,18 @@ python3 rl_agent/train_multiagent.py \
 ### Đánh Giá và So Sánh Baselines
 
 ```bash
-python rl_agent/evaluate.py \
-    --model models/dqn_best.zip \
-    --compare round_robin least_load \
-    --episodes 50
-    
 # Single-agent
-python rl_agent/evaluate.py  \
-		--model models/best_model.zip \
-		--episodes 20
+python rl_agent/evaluate.py \
+  --model   models/best_model.zip \
+  --dqn-model models/dqn_final.zip \
+  --ppo-model models/ppo_final.zip \
+  --episodes 50
 
 # Multi-agent (load cả 3 agent models từ thư mục)
 python rl_agent/evaluate.py \
-		--model models/multiagent/ \
-		--multiagent \
-		--episodes 20
+  --model models/multiagent/ \
+  --multiagent \
+  --episodes 50
 ```
 
 Kết quả xuất ra `data/comparison.png` và `data/metrics.csv`.
@@ -383,7 +376,6 @@ reward = (
 ### Kịch Bản 1 — Burst Traffic
 
 ```bash
-python3 scenarios/scenario1_burst.py
 # Traffic thấp ban đầu → đột ngột tăng packet-in trên nhóm switch
 # Mục tiêu: Agent phát hiện overload và migrate trong < 5 giây
 # Kỳ vọng: Giảm latency từ ~50ms xuống < 20ms, variance CPU giảm 30%
@@ -398,7 +390,6 @@ python3 scenarios/scenario1_burst.py --model models/multiagent/ --multiagent
 ### Kịch Bản 2 — Topology Động
 
 ```bash
-python3 scenarios/scenario2_dynamic_topo.py
 # Thêm/xóa switch động trong lúc chạy
 # Mục tiêu: Agent duy trì cân bằng lâu dài khi topo thay đổi
 # Kỳ vọng: Throughput loss < 5% (so với Round-Robin là 20%)
@@ -413,7 +404,6 @@ python3 scenarios/scenario2_dynamic_topo.py --model models/multiagent/ --multiag
 ### Kịch Bản 3 — Lỗi Controller Tạm Thời
 
 ```bash
-python3 scenarios/scenario3_controller_fault.py
 # Giả lập overload CPU một controller bằng stress tool
 # Mục tiêu: Agent migrate switch sang controllers khỏe mạnh, phục hồi khi controller ổn định
 # Kỳ vọng: Uptime 99%, reward hội tụ sau ~100 episodes
@@ -428,7 +418,6 @@ python3 scenarios/scenario3_controller_fault.py --model models/multiagent/ --mul
 ### Kịch Bản 4 — Traffic Ngẫu Nhiên (Poisson)
 
 ```bash
-python3 scenarios/scenario4_random_traffic.py
 # Packet-in rate theo phân phối Poisson, peak bất ngờ nhiều controller
 # Mục tiêu: Agent xử lý multi-overload, ưu tiên switch có impact lớn nhất
 # Kỳ vọng: Max latency giảm từ ~100ms xuống ~30ms, RAM < 70% tất cả controllers
@@ -445,7 +434,7 @@ python3 scenarios/scenario4_random_traffic.py --model models/multiagent/ --multi
 ## Kết Quả Đầu Ra
 
 | File | Nội dung |
-|---|---|
+| --- | --- |
 | `models/dqn_best.zip` | Model DQN tốt nhất sau training |
 | `logs/` | TensorBoard event logs (reward, loss, episode length) |
 | `data/reward_curve.png` | Reward vs Episodes — chứng minh hội tụ |
@@ -474,7 +463,7 @@ python3 scenarios/scenario4_random_traffic.py --model models/multiagent/ --multi
 ## Tham Số Huấn Luyện
 
 | Tham số | Giá trị mặc định | Ghi chú |
-|---|---|---|
+| --- | --- | --- |
 | `total_timesteps` | 200,000 | Tăng lên 500,000 nếu chưa hội tụ |
 | `learning_rate` | 1e-3 | Thử 1e-4 nếu training không ổn định |
 | `exploration_fraction` | 0.15 | Tăng nếu agent hội tụ quá sớm vào local optima |
@@ -517,10 +506,10 @@ sudo service openvswitch-switch restart
 
 ```bash
 # Kiểm tra REST API controller 1 hoạt động
-curl http://127.0.0.1:8080/stats/switches
+curl <http://127.0.0.1:8080/stats/switches>
 
 # Kiểm tra controller 2
-curl http://127.0.0.1:8081/stats/switches
+curl <http://127.0.0.1:8081/stats/switches>
 ```
 
 ---
@@ -528,7 +517,7 @@ curl http://127.0.0.1:8081/stats/switches
 ## Công Cụ Sử Dụng
 
 | Công cụ | Vai trò | Lý do chọn |
-|---|---|---|
+| --- | --- | --- |
 | **Mininet** | Mô phỏng topology SDN + generate traffic | Miễn phí, hỗ trợ OpenFlow đầy đủ |
 | **Ryu** | Cluster controller + REST API giám sát | Python, dễ mở rộng, hỗ trợ multi-instance |
 | **Gymnasium** | Định nghĩa MDP custom (State/Action/Reward) | Chuẩn RL, tích hợp tốt với SB3 |
