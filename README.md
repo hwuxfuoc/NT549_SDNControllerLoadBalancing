@@ -256,9 +256,9 @@ sudo systemctl start grafana-server
 
 | Metric | Mô tả | Nguồn |
 | --- | --- | --- |
-| `sdn_controller_cpu_percent` | CPU usage từng Ryu process | psutil |
-| `sdn_controller_ram_mb` | RAM usage từng Ryu process | psutil |
-| `sdn_controller_packet_in_rate` | Packet-in rate từng controller | Ryu REST API |
+| `sdn_cpu_percent` | CPU usage từng Ryu process | psutil |
+| `sdn_ram_mb` | RAM usage từng Ryu process | psutil |
+| `sdn_packet_in_rate` | Packet-in rate từng controller | Ryu REST API |
 | `sdn_switch_count` | Số switch kết nối mỗi controller | Ryu REST API |
 | `sdn_rl_reward` | Reward nhận được mỗi step | RL Agent |
 | `sdn_migration_count` | Số lần migrate trong episode | RL Agent |
@@ -283,7 +283,7 @@ python3 -m utils.migration_executor --switch 1 --target-controller 2
 # Chạy DQN
 python3 rl_agent/train.py \
     --algo dqn \
-    --timesteps 500000 \
+    --timesteps 200000 \
     --learning-rate 1e-3 \
     --batch-size 64 \
     --buffer-size 50000 \
@@ -294,7 +294,7 @@ python3 rl_agent/train.py \
 # Chạy PPO
 python3 rl_agent/train.py \
     --algo ppo \
-    --timesteps 500000 \
+    --timesteps 200000 \
     --learning-rate 3e-4 \
     --batch-size 64 \
     --controllers 3 \
@@ -309,7 +309,7 @@ tensorboard --logdir logs/
 ```bash
 # Mỗi Ryu controller là một agent độc lập
 python3 rl_agent/train_multiagent.py \
-    --timesteps 500000 \
+    --timesteps 200000 \
     --controllers 3 \
     --switches 12
 ```
@@ -322,13 +322,13 @@ python rl_agent/evaluate.py \
   --model   models/best_model.zip \
   --dqn-model models/dqn_final.zip \
   --ppo-model models/ppo_final.zip \
-  --episodes 50
+  --episodes 20
 
 # Multi-agent (load cả 3 agent models từ thư mục)
 python rl_agent/evaluate.py \
   --model models/multiagent/ \
   --multiagent \
-  --episodes 50
+  --episodes 20
 ```
 
 Kết quả xuất ra `data/comparison.png` và `data/metrics.csv`.
