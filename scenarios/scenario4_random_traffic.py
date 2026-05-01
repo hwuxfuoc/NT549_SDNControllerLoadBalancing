@@ -184,7 +184,7 @@ def main(model_path: str, output_dir: str, n_episodes: int, is_multiagent: bool)
     )
 
     # FIX: plot_comparison nhận dict gộp
-    rl_label = "Multi-Agent DQN" if is_multiagent else "DQN Best"
+    rl_label = "Multi-Agent DQN" if is_multiagent else "Best Model"
     plot_comparison(
         all_results={
             rl_label:      {"mean_reward": rl_result["mean_reward"], "std_reward": rl_result["std_reward"]},

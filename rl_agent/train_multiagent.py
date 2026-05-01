@@ -217,11 +217,16 @@ class MultiAgentSDNTrainer:
             f"Best checkpoint: {best_mean:.4f}"
         )
 
-        winner_src  = final_zip if final_mean >= best_mean else best_zip
-        winner_name = "Final" if final_mean >= best_mean else "Best checkpoint"
+        use_final   = final_mean >= best_mean
+        winner_src  = final_zip if use_final else best_zip
+        winner_name = "Final" if use_final else "Best checkpoint"
         dest        = self.model_dir / f"dqn_{agent_id}.zip"
 
-        shutil.copy2(str(winner_src), str(dest))
+        # Tránh SameFileError khi final_zip chính là dest (cùng path tuyệt đối)
+        if winner_src.resolve() != dest.resolve():
+            shutil.copy2(str(winner_src), str(dest))
+        # Nếu trùng path thì file đã đúng vị trí rồi, không cần copy
+
         logger.info(
             f"[{agent_id}] ✓ dqn_{agent_id}.zip ← {winner_name} "
             f"({max(final_mean, best_mean):.4f})"
